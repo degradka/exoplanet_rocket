@@ -17,6 +17,8 @@ const int CS_RADIO_PIN = 4;
 bool servoEnabled = false;
 const float GRAVITATIONAL_ACCELERATION = 9.78;
 
+Servo servo;
+
 // Acceleration class
 
 class Acceleration {
@@ -79,10 +81,17 @@ public:
   Acceleration acceleration;
   float barometerPressure;
   float altitude;
+  float previousAltitude;
   float temperature;
   float voltage;
 
-  Rocket() : mpuConnection(false), barometerConnection(false), hasRocketBeenReady(false), altitudeOffset(0.0) {}
+  bool startPoint;
+  bool apogeePoint;
+  bool activatePoint;
+  bool parachutePoint;
+  bool landingPoint;
+
+  Rocket() : mpuConnection(false), barometerConnection(false), hasRocketBeenReady(false), altitudeOffset(0.0), startPoint(false), apogeePoint(false), activatePoint(false), parachutePoint(false), landingPoint(false) {}
 
   void initialize() {
     setupSensors();
@@ -102,13 +111,38 @@ public:
 
   void processSensorData() {
     barometerPressure = pascalToMmHg(barometer.pres);
+    previousAltitude = altitude;
     altitude = barometer.alti - altitudeOffset;
     temperature = barometer.temp;
     acceleration.update(mpu.ax, mpu.ay, mpu.az);
     voltage = getArduinoVoltage();
   }
 
+void updateStatus() {
+  if (!startPoint) {
+    startPoint = (acceleration.magnitude() > 1 && acceleration.y > 0);
+  }
+
+  if (startPoint && !apogeePoint) {
+    apogeePoint = (acceleration.magnitude() <= 1 && altitude < previousAltitude || acceleration.y < 0);
+  }
+
+  if (apogeePoint && !activatePoint) {
+    activatePoint = (altitude < previousAltitude); 
+  }
+
+  if (activatePoint && !parachutePoint) {
+    parachutePoint = true;
+    servo.write(180);
+  }
+
+  if (startPoint && apogeePoint && !landingPoint) {
+    landingPoint = (acceleration.magnitude() < 0.1 && abs(acceleration.y) < 0.1 && altitude == previousAltitude);
+  }
+}
+
   void outputData() {
+    /*
     Serial.println("===== Rocket Data =====");
 
     Serial.print("Altitude: ");
@@ -132,6 +166,22 @@ public:
     Serial.println(" °C");
 
     Serial.println("=======================");
+    */
+
+    String dataString = String("1A;") +
+                        String(millis()) + ";" +
+                        String(voltage, 2) + ";" +
+                        String(altitude, 1) + ";" +
+                        String(acceleration.magnitude(), 1) + ";" +
+                        String(startPoint) + ";" +
+                        String(apogeePoint) + ";" +
+                        String(activatePoint) + ";" +
+                        String(parachutePoint) + ";" +
+                        String(landingPoint) + "\n";
+
+    // Print the data to Serial and Serial1
+    Serial.println(dataString);
+    Serial1.println(dataString);
   }
 private:
   VB_BMP280 barometer;
@@ -188,7 +238,6 @@ private:
 };
 
 Rocket rocket;
-Servo servo;
 
 void setup() {
   Serial.begin(9600);
@@ -215,11 +264,12 @@ void setup() {
 void loop() {
   while (!rocket.isReady());
 
-  servoTest();
+  //servoTest();
 
   rocket.readSensors();
   rocket.processSensorData();
   //sendCommandToRadio();
+  rocket.updateStatus();
   rocket.outputData();
 }
 

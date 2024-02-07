@@ -25,7 +25,7 @@ void loop() {
         char incomingChar = Serial.read();
 
         if (incomingChar == '\n') {  // Assuming newline is the end of your data
-            Serial.print("I received: ");
+            //Serial.print("I received: ");
             Serial.println(incomingData);
             //lcd.clear();
             //lcd.setCursor(0, 0);
