@@ -96,6 +96,7 @@ public:
   void initialize() {
     setupSensors();
     acceleration.calibrate(mpu, 100, 10);
+    servo.write(65);
     while (!isReady());
     onReady();
   }
@@ -264,7 +265,7 @@ void setup() {
 void loop() {
   while (!rocket.isReady());
 
-  //servoTest();
+  servoTest();
 
   rocket.readSensors();
   rocket.processSensorData();
@@ -279,12 +280,12 @@ void servoTest() {
     while (digitalRead(BUTTON_PIN) == HIGH);
 
     if (!servoEnabled) {
-      servo.write(90);
+      servo.write(65);
     } else {
       Serial.print("Setting servo angle to: ");
-      Serial.println(180);
-      Serial1.println(180);
-      servo.write(180);
+      Serial.println(0);
+      Serial1.println(0);
+      servo.write(0);
     }
   }
 }
