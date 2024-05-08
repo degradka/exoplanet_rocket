@@ -2,6 +2,7 @@
 #include <Servo.h>
 #include <VB_MPU9250.h>
 #include <VB_BMP280.h>
+#include <iarduino_VCC.h>
 
 // Constants
 
@@ -18,6 +19,9 @@ bool servoEnabled = false;
 const float GRAVITATIONAL_ACCELERATION = 9.78;
 
 Servo servo;
+
+long SSTimer;
+bool SSTimerStarted = false;
 
 // Acceleration class
 
@@ -96,7 +100,6 @@ public:
   void initialize() {
     setupSensors();
     acceleration.calibrate(mpu, 100, 10);
-    servo.write(65);
     while (!isReady());
     onReady();
   }
@@ -121,11 +124,14 @@ public:
 
 void updateStatus() {
   if (!startPoint) {
-    startPoint = (acceleration.magnitude() > 1 && acceleration.y > 0);
+    startPoint = (acceleration.magnitude() > 2 && acceleration.y > 0);
   }
 
   if (startPoint && !apogeePoint) {
-    apogeePoint = (acceleration.magnitude() <= 1 && altitude < previousAltitude || acceleration.y < 0);
+    SSTimerStarted = true;
+    if (altitude >= 100) {
+      apogeePoint = (acceleration.magnitude() <= 1 && altitude < previousAltitude || acceleration.y < 0);
+    }
   }
 
   if (apogeePoint && !activatePoint) {
@@ -134,7 +140,7 @@ void updateStatus() {
 
   if (activatePoint && !parachutePoint) {
     parachutePoint = true;
-    servo.write(180);
+    servo.write(0);
   }
 
   if (startPoint && apogeePoint && !landingPoint) {
@@ -169,7 +175,7 @@ void updateStatus() {
     Serial.println("=======================");
     */
 
-    String dataString = String("1A;") +
+    String dataString = String("22;") +
                         String(millis()) + ";" +
                         String(voltage, 2) + ";" +
                         String(altitude, 1) + ";" +
@@ -233,8 +239,10 @@ private:
   }
 
   float getArduinoVoltage() {
-    int sensorValue = analogRead(VOLTAGE_PIN);
-    return sensorValue * (5.0 / 1023.0);
+    //int sensorValue = analogRead(VOLTAGE_PIN);
+    //return sensorValue * (5.0 / 1023.0);
+    float sensorValue = analogRead_VCC();
+    return sensorValue;
   }
 };
 
@@ -243,7 +251,8 @@ Rocket rocket;
 void setup() {
   Serial.begin(9600);
   Serial1.begin(9600);
-  //while (!Serial);
+  //
+  while (!Serial1);
 
   pinMode(READY_LED, OUTPUT);
   digitalWrite(READY_LED, LOW);
@@ -257,6 +266,7 @@ void setup() {
   pinMode(SET_RADIO_PIN, INPUT);
 
   Wire.begin();
+  servo.write(180);
   servo.attach(SERVO_PIN);
 
   rocket.initialize();
@@ -272,6 +282,14 @@ void loop() {
   //sendCommandToRadio();
   rocket.updateStatus();
   rocket.outputData();
+
+  // SSTimer 10 = 1s
+  if (SSTimerStarted) {
+    SSTimer += 1;
+  }
+  if (SSTimer >= 70) {
+    servo.write(0);
+  }
 }
 
 void servoTest() {
@@ -280,7 +298,7 @@ void servoTest() {
     while (digitalRead(BUTTON_PIN) == HIGH);
 
     if (!servoEnabled) {
-      servo.write(65);
+      servo.write(180);
     } else {
       Serial.print("Setting servo angle to: ");
       Serial.println(0);
